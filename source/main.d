@@ -195,17 +195,14 @@ void renderAddress(ulong address)
 {
     writef("%0*x", 8, address);
 }
-void renderLine(ulong address, ubyte[] line, int row, DIFF[] diff, STYLE style)
+void renderLine(ubyte[] line, int row, DIFF[] diff, STYLE style)
 {
     int l = cast(int)line.length;
-    DIFF last = cast(DIFF)0xff;
     for (int i; i < row; i++)
     {
-        DIFF m = diff[i];
-        
         if (i < l)
         {
-            modeon(style, m);
+            modeon(style, diff[i]);
             writef("%*x", 2, line[i]);
             modeoff(style);
         }
@@ -213,8 +210,6 @@ void renderLine(ulong address, ubyte[] line, int row, DIFF[] diff, STYLE style)
         {
             write("  ");
         }
-        
-        last = m;
     }
 }
 void renderChars(ubyte[] line, DIFF[] diff, STYLE style)
@@ -228,12 +223,12 @@ void renderByLine(ulong address, ubyte[] line1, ubyte[] line2, int row, DIFF[] d
 {
     write("-");
     renderAddress(address);
-    renderLine(address, line1, row, diff, style);
+    renderLine(line1, row, diff, style);
     renderChars(line1, diff, style);
     writeln;
     write("+");
     renderAddress(address);
-    renderLine(address, line2, row, diff, style);
+    renderLine(line2, row, diff, style);
     renderChars(line2, diff, style);
     writeln;
 }
@@ -241,10 +236,10 @@ void renderByLine(ulong address, ubyte[] line1, ubyte[] line2, int row, DIFF[] d
 void renderBySide(ulong address, ubyte[] line1, ubyte[] line2, int row, DIFF[] diff, STYLE style)
 {
     renderAddress(address);
-    renderLine(address, line1, row, diff, style);
+    renderLine(line1, row, diff, style);
     renderChars(line1, diff, style);
     write(" |");
-    renderLine(address, line2, row, diff, style);
+    renderLine(line2, row, diff, style);
     renderChars(line2, diff, style);
     writeln;
 }
@@ -283,7 +278,8 @@ int main(string[] args)
     STYLE ostyle;
     bool osummary;
     bool oside;
-    GetoptResult get = getopt(args,
+    GetoptResult get = void;
+    try get = getopt(args,
         "c|columns", "Columns per row (default: 16)", &ocols,
         "side",      "Render side-by-side instead of per-line", &oside,
         "style",     "Marker style (plain, mono)", (string _, string val)
@@ -298,6 +294,11 @@ int main(string[] args)
         "summary",   "Only print diff changes", &osummary,
         "version",   "Show version page", &pageversion
     );
+    catch (Exception ex)
+    {
+        stderr.writeln("error: ", ex.msg);
+        return 1;
+    }
     
     if (get.helpWanted)
     {
