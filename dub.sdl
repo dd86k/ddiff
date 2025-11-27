@@ -1,0 +1,5 @@
+name "ddiff"
+description "Binary diff tool"
+authors "dd86k <dd@dax.moe>"
+copyright "Copyright © 2025, dd86k <dd@dax.moe>"
+license "BSD-3-Clause"
