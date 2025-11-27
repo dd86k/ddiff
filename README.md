@@ -1,10 +1,20 @@
 # ddiff
 
-Binary diff utility
+Binary diff utility:
+```text
+...
+-00000030 61 61 61+61 61 61 61 61 61 61 61 61 61 61 61 61 aaaaaaaaaaaaaaaa
++00000030 61 61 61+ff 61 61 61 61 61 61 61 61 61 61 61 61 aaa.aaaaaaaaaaaa
+...
+```
 
 Usage: `ddiff <file1> <file2>`
 
-Options: Use `--help`
+Options:
+- `--columns=`: Number of bytes (elements) per row. Defaults to 16.
+- `--side`: Compares side-by-side instead of per-row.
+- `--style=`: Defaults to `plain`, but `mono` offers monochrome coloring instead
+- `--summary`: Prints list of changes without data.
 
 Why?
 - https://www.zynamics.com/bindiff.html / https://github.com/google/bindiff
