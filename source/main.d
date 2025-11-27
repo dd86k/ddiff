@@ -234,7 +234,7 @@ void renderByLine(ulong address, ubyte[] line1, ubyte[] line2, int row, DIFF[] d
     write("+");
     renderAddress(address);
     renderLine(address, line2, row, diff, style);
-    renderChars(line1, diff, style);
+    renderChars(line2, diff, style);
     writeln;
 }
 
@@ -245,7 +245,7 @@ void renderBySide(ulong address, ubyte[] line1, ubyte[] line2, int row, DIFF[] d
     renderChars(line1, diff, style);
     write(" |");
     renderLine(address, line2, row, diff, style);
-    renderChars(line1, diff, style);
+    renderChars(line2, diff, style);
     writeln;
 }
 
