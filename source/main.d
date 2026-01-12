@@ -306,8 +306,9 @@ int main(string[] args)
     LAYOUT olayout; // ubyte
     GetoptResult get = void;
     try get = getopt(args, config.caseSensitive,
-        "c|columns", "Columns per row (default: 16)", &ocols,
-        "side",      "Render side-by-side instead of per-line", () // legacy
+        "c|columns", "Columns per row (default: 8)", &ocols,
+        // Alias for --layout=side
+        "side",      "Render side-by-side instead of per-line", ()
         {
             olayout = LAYOUT.side;
         },
@@ -319,6 +320,12 @@ int main(string[] args)
             default:
                 throw new Exception(text("Unknown layout: ", val));
             }
+        },
+        // Alias for --style=mono
+        "C|color",   "Use color if available", ()
+        {
+            // TODO: Auto-detection needed (xterm, xterm-256color, etc.)
+            ostyle = STYLE.monochrome;
         },
         "style",     "Marker style (plain, mono)", (string _, string val)
         {
