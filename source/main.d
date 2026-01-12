@@ -15,7 +15,7 @@ struct DiffRegion
     bool identical;
 }
 
-// TODO: Cache buffers
+// TODO: Read buffers
 struct BinDiff
 {
     this(File source, File target)
@@ -300,7 +300,7 @@ void pageversion()
 
 int main(string[] args)
 {
-    int ocols = 16;
+    int ocols = 8;
     STYLE ostyle;
     bool osummary;
     LAYOUT olayout; // ubyte
