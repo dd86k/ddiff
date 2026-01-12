@@ -1,5 +1,7 @@
 module main;
 
+// TODO: Render class to hold parameters
+
 //
 // Diff
 //
@@ -13,6 +15,7 @@ struct DiffRegion
     bool identical;
 }
 
+// TODO: Cache buffers
 struct BinDiff
 {
     this(File source, File target)
@@ -155,10 +158,15 @@ enum DIFF : ubyte {
     ADD,
 }
 
-enum STYLE {
+enum STYLE : ubyte {
     plain,
     monochrome,
     //colorful,
+}
+
+enum LAYOUT : ubyte {
+    inline,
+    side,
 }
 
 void modeon(STYLE style, DIFF diff)
@@ -208,40 +216,58 @@ void renderLine(ubyte[] line, int row, DIFF[] diff, STYLE style)
         }
         else
         {
-            write("  ");
+            write("   "); // +1 to account for separator or indicator
         }
     }
 }
-void renderChars(ubyte[] line, DIFF[] diff, STYLE style)
+void renderChars(ubyte[] line, DIFF[] diff, STYLE style, int columns)
 {
     write(" ");
-    foreach (ubyte b; line)
-        write( tochar(b) );
+    // Helps when rendering side by side
+    for (int i; i < columns; i++)
+    {
+        if (i < line.length)
+            write( tochar(line[i]) );
+        else
+            write( ' ' );
+    }
 }
 
-void renderByLine(ulong address, ubyte[] line1, ubyte[] line2, int row, DIFF[] diff, STYLE style)
+void renderByLine(ulong address, ubyte[] line1, ubyte[] line2, int cols, DIFF[] diff, STYLE style)
 {
     write("-");
     renderAddress(address);
-    renderLine(line1, row, diff, style);
-    renderChars(line1, diff, style);
+    renderLine(line1, cols, diff, style);
+    renderChars(line1, diff, style, cols);
     writeln;
     write("+");
     renderAddress(address);
-    renderLine(line2, row, diff, style);
-    renderChars(line2, diff, style);
+    renderLine(line2, cols, diff, style);
+    renderChars(line2, diff, style, cols);
     writeln;
 }
 
-void renderBySide(ulong address, ubyte[] line1, ubyte[] line2, int row, DIFF[] diff, STYLE style)
+void renderBySide(ulong address, ubyte[] line1, ubyte[] line2, int cols, DIFF[] diff, STYLE style)
 {
     renderAddress(address);
-    renderLine(line1, row, diff, style);
-    renderChars(line1, diff, style);
+    renderLine(line1, cols, diff, style);
+    renderChars(line1, diff, style, cols);
     write(" |");
-    renderLine(line2, row, diff, style);
-    renderChars(line2, diff, style);
+    renderLine(line2, cols, diff, style);
+    renderChars(line2, diff, style, cols);
     writeln;
+}
+
+void render(ulong address, ubyte[] line1, ubyte[] line2, int cols, DIFF[] diff, STYLE style, LAYOUT layout)
+{
+    final switch (layout) {
+    case LAYOUT.inline:
+        renderByLine(address, line1, line2, cols, diff, style);
+        break;
+    case LAYOUT.side:
+        renderBySide(address, line1, line2, cols, diff, style);
+        break;
+    }
 }
 
 //
@@ -277,11 +303,23 @@ int main(string[] args)
     int ocols = 16;
     STYLE ostyle;
     bool osummary;
-    bool oside;
+    LAYOUT olayout; // ubyte
     GetoptResult get = void;
-    try get = getopt(args,
+    try get = getopt(args, config.caseSensitive,
         "c|columns", "Columns per row (default: 16)", &ocols,
-        "side",      "Render side-by-side instead of per-line", &oside,
+        "side",      "Render side-by-side instead of per-line", () // legacy
+        {
+            olayout = LAYOUT.side;
+        },
+        "l|layout",  "Use layout ('inline', 'side')", (string _, string val)
+        {
+            switch (val) {
+            case "inline":  olayout = LAYOUT.inline; break;
+            case "side":    olayout = LAYOUT.side; break;
+            default:
+                throw new Exception(text("Unknown layout: ", val));
+            }
+        },
         "style",     "Marker style (plain, mono)", (string _, string val)
         {
             switch (val) {
@@ -338,24 +376,21 @@ int main(string[] args)
         return 0;
     }
     
-    //ulong size1 = file1.size();
-    //ulong size2 = file2.size();
-    /*ulong delta;
-    if (size1 < size2)
-        delta = size2 - size1;
-    else if (size2 < size1)
-        delta = size1 - size2;
-    */
-    
     ubyte[] line1;
     ubyte[] line2;
     DIFF[] diff;
     line1.length = line2.length = diff.length = ocols;
+    diff[]  = cast(DIFF)0xff;
     
     ulong last_cumulative;
     bool linespaced;
     foreach (DiffRegion region; BinDiff(file1, file2))
     {
+        // If region identical, boring, we skip that
+        if (region.identical)
+            continue;
+        
+        // TODO: Fix "..." printing inbetween two valid adjacent lines
         // TODO: Only print if we have data before/after different spots
         if (linespaced == false)
         {
@@ -363,21 +398,14 @@ int main(string[] args)
             linespaced = true;
         }
         
-        // If region identical, boring, we skip that
-        if (region.identical)
-            continue;
-        
         // If region is within last render's cumulative (pos+ROW), skip
         if (region.offset < last_cumulative)
             continue;
-        
-        // TODO: Handle situation where diffregion mentions same range since last print
         
         linespaced = false;
         
         line1[] = 0;
         line2[] = 0;
-        diff[]  = cast(DIFF)0xff;
         
         // align down by ROW to get starting pos
         ulong pos = region.offset-(region.offset % ocols);
@@ -390,7 +418,7 @@ int main(string[] args)
         ubyte[] l1 = file1.rawRead(line1);
         ubyte[] l2 = file2.rawRead(line2);
         
-        // lazy lazy lazy
+        // LAZY: populates diff region
         for (int h; h < ocols; h++)
         {
             if (h < l1.length && h < l2.length)
@@ -400,9 +428,7 @@ int main(string[] args)
             else break;
         }
         
-        oside ?
-        renderBySide(pos, l1, l2, ocols, diff, ostyle):
-        renderByLine(pos, l1, l2, ocols, diff, ostyle);
+        render(pos, l1, l2, ocols, diff, ostyle, olayout);
     }
     
     return 0;
