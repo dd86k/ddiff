@@ -15,67 +15,78 @@ struct DiffRegion
     bool identical;
 }
 
-// TODO: Read buffers
 struct BinDiff
 {
-    this(File source, File target)
+    this(File source, File target, size_t bufSize = 8192)
     {
         file1 = source;
         file2 = target;
-        
+        buf1 = new ubyte[bufSize];
+        buf2 = new ubyte[bufSize];
+
         size1 = file1.size();
         size2 = file2.size();
         minimum = min(size1, size2);
-        
+
+        if (minimum > 0)
+            _fillBuffers(0);
+
         // Prime the first region
         if (!_done)
             _primeNext();
     }
-    
+
     bool empty()
     {
         return _done;
     }
-    
+
     DiffRegion front()
     {
         return _current;
     }
-    
+
     void popFront()
     {
         _primeNext();
     }
-    
+
 private:
+    void _fillBuffers(ulong position)
+    {
+        bufStart = position;
+        file1.seek(position);
+        file2.seek(position);
+        auto r1 = file1.rawRead(buf1);
+        auto r2 = file2.rawRead(buf2);
+        bufLen1 = r1.length;
+        bufLen2 = r2.length;
+    }
+
     void _primeNext()
     {
-        ubyte[1] b1 = void, b2 = void;
         if (i < minimum)
         {
-            // Read bytes at current position
-            file1.seek(i);
-            file2.seek(i);
-            file1.rawRead(b1);
-            file2.rawRead(b2);
-            
-            bool currentMatch = (b1[0] == b2[0]);
+            if (i >= bufStart + bufLen1 || i >= bufStart + bufLen2)
+                _fillBuffers(i);
+
+            size_t off = cast(size_t)(i - bufStart);
+            bool currentMatch = (buf1[off] == buf2[off]);
             ulong start = i;
-            
+
             // Extend region while status remains same
             i++;
             while (i < minimum)
             {
-                file1.seek(i);
-                file2.seek(i);
-                file1.rawRead(b1);
-                file2.rawRead(b2);
-                
-                if ((b1[0] == b2[0]) != currentMatch)
+                if (i >= bufStart + bufLen1 || i >= bufStart + bufLen2)
+                    _fillBuffers(i);
+
+                off = cast(size_t)(i - bufStart);
+                if ((buf1[off] == buf2[off]) != currentMatch)
                     break;
                 i++;
             }
-            
+
             _current = DiffRegion(start, i - start, currentMatch);
         }
         // Handle tail if files differ in length
@@ -90,10 +101,14 @@ private:
             _done = true;
         }
     }
-    
+
     File file1; long size1;
     File file2; long size2;
-    
+
+    ubyte[] buf1, buf2;
+    size_t bufLen1, bufLen2;
+    ulong bufStart;
+
     ulong i;
     ulong minimum;
     bool _done = false;
