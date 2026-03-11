@@ -15,5 +15,9 @@ ddiff-test-*
 *.obj
 *.lst
 
+# Personal
 /samples/
 /old/
+
+# Claude
+.claude/
