@@ -272,8 +272,17 @@ int main(string[] args)
         return 1;
     }
     
-    File file1 = File(args[1], "rb");
-    File file2 = File(args[2], "rb");
+    File file1, file2;
+    try
+    {
+        file1 = File(args[1], "rb");
+        file2 = File(args[2], "rb");
+    }
+    catch (Exception ex)
+    {
+        stderr.writeln("error: ", ex.msg);
+        return 1;
+    }
     
     if (osummary)
     {
@@ -288,55 +297,62 @@ int main(string[] args)
     ubyte[] line2;
     DIFF[] diff;
     line1.length = line2.length = diff.length = ocols;
-    diff[]  = cast(DIFF)0xff;
     
     ulong last_cumulative;
-    bool linespaced;
+    bool hadOutput;
     foreach (DiffRegion region; BinDiff(file1, file2))
     {
         // If region identical, boring, we skip that
         if (region.identical)
             continue;
-        
-        // TODO: Fix "..." printing inbetween two valid adjacent lines
-        // TODO: Only print if we have data before/after different spots
-        if (linespaced == false)
-        {
-            writeln("...");
-            linespaced = true;
-        }
-        
-        // If region is within last render's cumulative (pos+ROW), skip
-        if (region.offset < last_cumulative)
-            continue;
-        
-        linespaced = false;
-        
-        line1[] = 0;
-        line2[] = 0;
-        
+
         // align down by ROW to get starting pos
         ulong pos = region.offset-(region.offset % ocols);
-        
-        last_cumulative = pos + ocols;
-        
-        file1.seek(pos);
-        file2.seek(pos);
-        
-        ubyte[] l1 = file1.rawRead(line1);
-        ubyte[] l2 = file2.rawRead(line2);
-        
-        // LAZY: populates diff region
-        for (int h; h < ocols; h++)
+
+        // Print "..." when there are skipped rows between renders
+        if (pos > last_cumulative)
         {
-            if (h < l1.length && h < l2.length)
-            {
-                diff[h] = l1[h] != l2[h] ? DIFF.ADD : DIFF.SAME;
-            }
-            else break;
+            writeln("...");
         }
-        
-        render(pos, l1, l2, ocols, diff, ostyle, olayout);
+
+        // Render all rows that overlap this region
+        ulong regionEnd = region.offset + region.length;
+        while (pos < regionEnd)
+        {
+            if (pos < last_cumulative)
+            {
+                pos += ocols;
+                continue;
+            }
+
+            last_cumulative = pos + ocols;
+
+            line1[] = 0;
+            line2[] = 0;
+            diff[] = DIFF.SAME;
+
+            file1.seek(pos);
+            file2.seek(pos);
+
+            ubyte[] l1 = file1.rawRead(line1);
+            ubyte[] l2 = file2.rawRead(line2);
+
+            for (int h; h < ocols; h++)
+            {
+                if (h < l1.length && h < l2.length)
+                {
+                    diff[h] = l1[h] != l2[h] ? DIFF.ADD : DIFF.SAME;
+                }
+                else if (h < l1.length || h < l2.length)
+                {
+                    diff[h] = DIFF.ADD;
+                }
+            }
+
+            render(pos, l1, l2, ocols, diff, ostyle, olayout);
+            hadOutput = true;
+            pos += ocols;
+        }
     }
     
     return 0;

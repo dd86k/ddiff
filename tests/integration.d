@@ -459,18 +459,15 @@ unittest
 }
 
 //
-// Known bugs (regression markers)
-// These tests document current buggy behavior. When a bug is fixed,
-// the test should be flipped to assert the correct behavior.
+// Regression tests (previously known bugs, now fixed)
 //
 
-// BUG: Stale diff[] markers from previous row leak into next row
-// when one file is shorter, causing wrong + markers on tail bytes.
-// Affected code: main.d render loop — diff[] not reset between rows.
+// Diff markers are freshly computed per row, not stale from previous rows.
+// Tail bytes (in one file but not the other) get ADD markers.
 unittest
 {
-    // Row 0: positions 4-7 differ (ADD stored in diff[4..7])
-    // Row 1: file1 has 4 bytes, file2 has 8: diff[4..7] stale
+    // Row 0: positions 4-7 differ between files
+    // Row 1: file1 has 4 bytes, file2 has 8 — tail bytes marked ADD
     ubyte[12] a = [1,1,1,1, 0xAA,0xAA,0xAA,0xAA, 0xBB,1,1,1];
     ubyte[16] b = 1;
     mkfile("stale_a", a[]);
@@ -478,37 +475,33 @@ unittest
     auto r = ddiff(tmpPath("stale_a"), tmpPath("stale_b"));
     assert(r.status == 0);
 
-    // Find the second + line (row 1 of file2)
-    string secondPlus;
-    int plusCount = 0;
+    // Row 1: byte 0 differs (0xBB vs 1), bytes 1-3 are same (1 vs 1),
+    // bytes 4-7 are tail (only in file2) and should be marked ADD.
+    string secondMinus;
+    int minusCount = 0;
     foreach (line; r.output.splitLines())
     {
-        if (line.startsWith("+"))
+        if (line.startsWith("-"))
         {
-            plusCount++;
-            if (plusCount == 2)
+            minusCount++;
+            if (minusCount == 2)
             {
-                secondPlus = line;
+                secondMinus = line;
                 break;
             }
         }
     }
-    assert(secondPlus.length > 0, "expected two + lines");
-
-    // BUG: The second + line has stale "+ 1+ 1+ 1+ 1" for positions 4-7
-    // Once fixed, these bytes should show " 1 1 1 1" (SAME markers, no +)
-    bool hasStaleMarkers = secondPlus.indexOf("+ 1+ 1+ 1+ 1") >= 0;
-    assert(hasStaleMarkers,
-        "STALE DIFF BUG seems fixed! Update this test. Line: " ~ secondPlus);
+    assert(secondMinus.length > 0, "expected two - lines");
+    // Bytes 1-3 on the - line must NOT have + markers (they are SAME)
+    // The pattern should be: "+bb  1  1  1" (only byte 0 has +)
+    assert(secondMinus.indexOf("+bb  1  1  1") >= 0,
+        "expected only byte 0 marked as ADD in row 1, got: " ~ secondMinus);
 }
 
-// BUG: Multi-row diff regions only render first row.
-// If a DiffRegion spans more bytes than `columns`, only the first
-// aligned row is rendered; subsequent rows are silently skipped.
-// Affected code: main.d render loop — no inner loop over rows.
+// Multi-row diff regions render all rows, not just the first.
 unittest
 {
-    // abc1 vs abc2 equivalent: DiffRegion(4, 12, false) spans rows 0 and 8
+    // DiffRegion(4, 12, false) spans rows at offsets 0 and 8 with 8 columns
     ubyte[16] a = [0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,
                    0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,0x70];
     ubyte[16] b = [0x61,0x62,0x63,0x64,0x77,0x78,0x79,0x7a,
@@ -518,23 +511,82 @@ unittest
     auto r = ddiff("-c", "8", tmpPath("mrow_a"), tmpPath("mrow_b"));
     assert(r.status == 0);
 
-    // BUG: row at offset 0x08 is not rendered
-    bool hasRow8 = r.output.indexOf("00000008") >= 0;
-    assert(!hasRow8,
-        "MULTI-ROW BUG seems fixed! Update this test. Output:\n" ~ r.output);
+    // Row at offset 0x08 must be rendered
+    assert(r.output.indexOf("00000008") >= 0,
+        "expected row at 00000008, got:\n" ~ r.output);
 }
 
-// BUG: Nonexistent file produces stack trace instead of clean error.
-// The File() constructor at main.d:275 is outside the try/catch.
+// "..." separator only appears between non-adjacent rendered rows.
+
+bool _hasDotSeparator(string output)
+{
+    foreach (line; output.splitLines())
+        if (line == "...")
+            return true;
+    return false;
+}
+
+size_t _countDotSeparators(string output)
+{
+    size_t n = 0;
+    foreach (line; output.splitLines())
+        if (line == "...")
+            n++;
+    return n;
+}
+
+// No leading "..." when first diff is at or near offset 0.
+unittest
+{
+    // Diff at byte 2 — row 0 is rendered, no rows skipped before it
+    mkfile("dots_a", [1, 2, 3, 4, 5]);
+    mkfile("dots_b", [1, 2, 99, 4, 5]);
+    auto r = ddiff(tmpPath("dots_a"), tmpPath("dots_b"));
+    assert(r.status == 0);
+    assert(!_hasDotSeparator(r.output),
+        "no '...' expected when diff starts in first row, got:\n" ~ r.output);
+}
+
+// "..." appears when identical rows are skipped between diffs
+unittest
+{
+    // Diffs at byte 0 and byte 48 (with 5 identical rows in between at cols=8)
+    ubyte[56] a = 1;
+    ubyte[56] b = 1;
+    a[0] = 0xAA;
+    a[48] = 0xBB;
+    mkfile("dots2_a", a[]);
+    mkfile("dots2_b", b[]);
+    auto r = ddiff(tmpPath("dots2_a"), tmpPath("dots2_b"));
+    assert(r.status == 0);
+    assert(_countDotSeparators(r.output) == 1,
+        text("expected 1 '...' separator, got ",
+            _countDotSeparators(r.output), " in:\n", r.output));
+}
+
+// No "..." between consecutive rendered rows
+unittest
+{
+    // All 16 bytes differ — renders rows 0 and 8 back-to-back
+    ubyte[16] a = 0;
+    ubyte[16] b = 1;
+    mkfile("dots3_a", a[]);
+    mkfile("dots3_b", b[]);
+    auto r = ddiff(tmpPath("dots3_a"), tmpPath("dots3_b"));
+    assert(r.status == 0);
+    assert(!_hasDotSeparator(r.output),
+        "no '...' expected for consecutive rows, got:\n" ~ r.output);
+}
+
+// Nonexistent file produces a clean error message, not a stack trace.
 unittest
 {
     auto r = ddiff("/tmp/ddiff_nonexistent_test_file", "samples/a1");
-    assert(r.status != 0, "expected non-zero exit for nonexistent file");
+    assert(r.status == 1, text("expected exit 1, got ", r.status));
 
-    // BUG: Output contains stack trace lines like "source/main.d:275" or "??:?"
-    bool hasStackTrace = r.output.indexOf("??:?") >= 0 ||
-                         r.output.indexOf("source/main.d") >= 0;
-    assert(hasStackTrace,
-        "STACK TRACE BUG seems fixed! Update this test. Output:\n" ~ r.output);
+    // Should show "error: ..." not a stack trace
+    assert(r.output.indexOf("error:") >= 0, "expected 'error:' prefix in: " ~ r.output);
+    assert(r.output.indexOf("??:?") < 0, "unexpected stack trace in: " ~ r.output);
+    assert(r.output.indexOf("source/main.d") < 0, "unexpected stack trace in: " ~ r.output);
 }
 
