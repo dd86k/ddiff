@@ -8,13 +8,13 @@ Binary diff utility:
 ...
 ```
 
-Usage: `ddiff <file1> <file2>`
+Usage: `ddiff [OPTIONS] <file1> <file2>`
 
 Options:
-- `--columns=`: Number of bytes (elements) per row. Defaults to 16.
+- `--columns=`: Number of bytes (elements) per row. Defaults to 8 columns.
 - `--side`: Compares side-by-side instead of per-row.
-- `--style=`: Defaults to `plain`, but `mono` offers monochrome coloring instead
-- `--summary`: Prints list of changes without data.
+- `--style=`: Defaults to `plain`. `mono` offers monochrome coloring instead.
+- `--regions`: Prints list of regions. Tab separated position, length, and status.
 
 Why?
 - https://www.zynamics.com/bindiff.html / https://github.com/google/bindiff

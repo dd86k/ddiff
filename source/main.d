@@ -203,7 +203,7 @@ int main(string[] args)
 {
     int ocols = 8;
     STYLE ostyle;
-    bool osummary;
+    bool oregions;
     LAYOUT olayout; // ubyte
     GetoptResult get = void;
     try get = getopt(args, config.caseSensitive,
@@ -237,7 +237,7 @@ int main(string[] args)
                 throw new Exception(text("Unknown style: ", val));
             }
         },
-        "summary",   "Only print diff changes", &osummary,
+        "regions",   "Only print diff changes", &oregions,
         "version",   "Show version page", &pageversion
     );
     catch (Exception ex)
@@ -284,11 +284,11 @@ int main(string[] args)
         return 1;
     }
     
-    if (osummary)
+    if (oregions)
     {
         foreach (DiffRegion region; BinDiff(file1, file2))
         {
-            writeln(region);
+            writeln(region.offset, '\t', region.length, '\t', region.identical ? "identical" : "different");
         }
         return 0;
     }
