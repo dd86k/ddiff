@@ -204,6 +204,7 @@ int main(string[] args)
     int ocols = 8;
     STYLE ostyle;
     bool oregions;
+    bool osummary;
     LAYOUT olayout; // ubyte
     GetoptResult get = void;
     try get = getopt(args, config.caseSensitive,
@@ -237,7 +238,8 @@ int main(string[] args)
                 throw new Exception(text("Unknown style: ", val));
             }
         },
-        "regions",   "Only print diff changes", &oregions,
+        "regions",   "Print regions with position, length, and status", &oregions,
+        "summary",   "Show a summary of changes", &osummary,
         "version",   "Show version page", &pageversion
     );
     catch (Exception ex)
@@ -282,6 +284,25 @@ int main(string[] args)
     {
         stderr.writeln("error: ", ex.msg);
         return 1;
+    }
+    
+    if (osummary)
+    {
+        ulong regions, total, total_diff, different;
+        foreach (DiffRegion region; BinDiff(file1, file2))
+        {
+            ++regions;
+            total += region.length;
+            if (region.identical == false)
+            {
+                total_diff += region.length;
+                ++different;
+            }
+        }
+        writefln("%u regions (%u differ, %.1f%%), %u / %u Bytes differ",
+            regions, different, (cast(double)different / regions) * 100f,
+            total_diff, total);
+        return 0;
     }
     
     if (oregions)
