@@ -15,6 +15,11 @@ ddiff-test-*
 *.obj
 *.lst
 
+# Archives
+*.zip
+*.tar.gz
+*.tar.xz
+
 # Personal
 /samples/
 /old/
