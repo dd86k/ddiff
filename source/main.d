@@ -16,7 +16,7 @@ version(Windows)
     import core.sys.windows.winbase;
     import core.sys.windows.wincon;
     import core.sys.windows.windef;
-    __gshared uint oldAttr;
+    __gshared ushort oldAttr;
 }
 
 void terminalInvertColor()
