@@ -205,6 +205,7 @@ int main(string[] args)
     STYLE ostyle;
     bool oregions;
     bool osummary;
+    bool obrief;
     LAYOUT olayout; // ubyte
     GetoptResult get = void;
     try get = getopt(args, config.caseSensitive,
@@ -238,8 +239,9 @@ int main(string[] args)
                 throw new Exception(text("Unknown style: ", val));
             }
         },
-        "regions",   "Print regions with position, length, and status", &oregions,
-        "summary",   "Show a summary of changes", &osummary,
+        "regions",   "Mode: Print regions with position, length, and status", &oregions,
+        "summary",   "Mode: Show a summary of changes", &osummary,
+        "brief",     "Mode: Quickest way to know if two files differ", &obrief,
         "version",   "Show version page", &pageversion
     );
     catch (Exception ex)
@@ -286,6 +288,22 @@ int main(string[] args)
         return 1;
     }
     
+    // Brief mode
+    if (obrief)
+    {
+        foreach (DiffRegion region; BinDiff(file1, file2))
+        {
+            if (region.identical == false)
+            {
+                writeln("different");
+                return 0;
+            }
+        }
+        writeln("identical");
+        return 0;
+    }
+    
+    // Summary mode
     if (osummary)
     {
         ulong regions, total, total_diff, different;
@@ -305,6 +323,7 @@ int main(string[] args)
         return 0;
     }
     
+    // Region mode
     if (oregions)
     {
         foreach (DiffRegion region; BinDiff(file1, file2))
