@@ -3,6 +3,8 @@ module ddiff.ddiff;
 import std.algorithm : min, max;
 import std.stdio : File;
 
+static immutable string DDIFF_VERSION = "0.0.1";
+
 struct DiffRegion
 {
     ulong offset;

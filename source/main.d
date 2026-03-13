@@ -181,8 +181,6 @@ void render(ulong address, ubyte[] line1, ubyte[] line2, int cols, DIFF[] diff, 
 // CLI
 //
 
-static immutable string VERSION = "0.0.1";
-
 void printfield(string field, string line, int spacing = -12)
 {
     writefln("%*s %s", spacing, field ? field : "", line);
@@ -191,7 +189,7 @@ void pageversion()
 {
     import core.stdc.stdlib : exit;
     static immutable string BUILDINFO = "Built: "~__TIMESTAMP__;
-    printfield("ddiff",     VERSION);
+    printfield("ddiff",     DDIFF_VERSION);
     printfield(null,        BUILDINFO);
     printfield("License",   "CC0-1.0");
     printfield(null,        "https://creativecommons.org/publicdomain/zero/1.0/");
